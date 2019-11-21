@@ -5,7 +5,23 @@ import luigi
 import pickle        
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from operator import itemgetter
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+
+# [[104   2   1]
+#  [ 22   2   1]
+#  [ 35   2   2]]
+#               precision    recall  f1-score   support
+
+#            0       0.65      0.97      0.78       107
+#            1       0.33      0.08      0.13        25
+#            2       0.50      0.05      0.09        39
+
+#     accuracy                           0.63       171
+#    macro avg       0.49      0.37      0.33       171
+# weighted avg       0.57      0.63      0.53       171
+
+# 0.631578947368421
+
 
 class CleanDataTask(luigi.Task):
     tweet_file = luigi.Parameter()
@@ -60,6 +76,22 @@ class TrainingDataTask(luigi.Task):
         return np.eye(len(cities)), cities
 
     def get_eucl_dist_sqrd(self, latlon1, latlon2):
+        '''Computes Euclidean distance between points on the Earth
+
+        Parameters
+        ----------
+        latlon1 : float array
+            Geo-coords for point 1
+        latlon2 : float array
+            Geo-coords for point 2
+
+        Returns
+        -------
+        distance
+            Euclidean distance between point 1 and 2
+            We set the Earth radius = 1 (i.e. length units where the Earth radius = 1)
+            See Ref: https://vvvv.org/blog/polar-spherical-and-geographic-coordinates
+        '''
         lat1 = latlon1[0]
         lon1 = latlon1[1]
         lat2 = latlon2[0]
@@ -84,7 +116,6 @@ class TrainingDataTask(luigi.Task):
 
     def run(self):
         onehot, cities = self.get_one_hot_encoding()
-        print(cities, file=open("log.txt","a"))
         with open(self.cities_1hot_file, 'wb') as fid:
             pickle.dump(cities, fid)        
         line_count = 0
@@ -135,9 +166,17 @@ class TrainModelTask(luigi.Task):
         classifier = RandomForestClassifier(n_estimators=200, random_state=0)
         classifier.fit(X_train, y_train)
 
+        predictions = classifier.predict(X_test)
+        print(confusion_matrix(y_test, predictions))
+        print(classification_report(y_test, predictions))
+        print(accuracy_score(y_test, predictions))
+
+        
         # save the classifier
         with open(self.output().path, 'wb') as fid:
             pickle.dump(classifier, fid)
+
+
 
             
 class ScoreTask(luigi.Task):
@@ -172,11 +211,3 @@ class ScoreTask(luigi.Task):
             
 if __name__ == "__main__":
     luigi.run()
-
-
-                               
-        # predict_out = sorted(predict_out, key = lambda x: x[3])   
-        # with open(self.output_file, 'w') as score_file:
-            # csv_writer = csv.writer(score_file, delimiter=',')
-            # for i in predict_out_2:
-                # csv_writer.writerow(i)
